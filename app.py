@@ -47,7 +47,7 @@ if has_coordinates:
     valid_coords = sum(r.get("enlem") is not None and r.get("boylam") is not None for r in normalized)
     st.info(f"Excel'de {valid_coords:,} satırda geçerli ENLEM/BOYLAM bulundu. Bu koordinatlar TKGM'nin herkese açık koordinat sorgusunda kullanılabilir.")
 else:
-    st.warning("Excel'inizde ENLEM ve BOYLAM sütunları yok. TKGM'nin herkese açık koordinat servisi koordinattan parsele gider; yalnızca ada/parsel bilgisinden koordinat bulmaz. Bu beş sütunla otomatik TKGM sorgusu yapılamaz.")
+    st.info("Koordinat sütunları zorunlu değil. Uygulama, aşağıdaki eşleştirme sırasında herkese açık parsel katmanlarını otomatik tarayacak.")
 
 if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     features, source_errors = [], []
@@ -98,7 +98,7 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
         with st.expander(f"Kaynak / sorgu notları ({len(source_errors)})"):
             for msg in source_errors: st.warning(msg)
     if not features:
-        st.error("Gerçek parsel geometrisi elde edilemedi. Beş sütunlu Excel tek başına yeterli değildir: TKGM'nin herkese açık servisi koordinat -> parsel sorgusu yapar; ada/parsel -> koordinat sorgusu e-Devlet yetkilendirmesi gerektirir. ENLEM/BOYLAM sütunları ekleyin veya lisansı uygun açık geometri/WFS kaynağı sağlayın. Mahalle merkezi gibi yaklaşık noktalar parsel konumu olarak kullanılmadı.")
+        st.error("Bu çalıştırmada Excel kayıtlarıyla güvenilir biçimde eşleşen açık parsel geometrisi bulunamadı. Koordinat eklemeniz gerekmiyor; farklı açık veri katalogları ve belediye katmanlarıyla kapsama alanını genişletmemiz gerekiyor. Yaklaşık mahalle merkezleri parsel konumu olarak kullanılmadı.")
         st.stop()
     with st.spinner(f"{len(features):,} geometri kaydı eşleştiriliyor..."):
         results, matched_features = match_records(normalized, features)
