@@ -44,6 +44,7 @@ if errors:
 st.subheader("Excel önizlemesi")
 st.dataframe(df.head(20), use_container_width=True)
 st.write(f"Toplam kayıt: **{len(normalized):,}**")
+tkgm_terms_ok = st.checkbox("TKGM açık Parsel Sorgu kullanım koşullarını kabul ediyorum; istekler servis limitlerine tabidir.", value=False)
 has_coordinates = all("enlem" in r and "boylam" in r for r in normalized)
 if has_coordinates:
     valid_coords = sum(r.get("enlem") is not None and r.get("boylam") is not None for r in normalized)
