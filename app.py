@@ -5,6 +5,8 @@ from core.matching import match_records
 from sources.loaders import load_spatial_upload
 from sources.wfs import fetch_public_wfs
 from sources.tkgm_public import lookup_parcel_by_coordinate
+from sources.arcgis_public import discover_public_parcel_features
+from core.normalize import norm
 from map_view.render import build_map
 from reports.export import make_excel
 
@@ -21,6 +23,7 @@ with st.sidebar:
     wfs_url = st.text_input("Herkese açık WFS adresi", placeholder="https://.../wfs")
     wfs_layer = st.text_input("Katman adı (typeName)", placeholder="workspace:parcel_layer")
     wfs_limit = st.number_input("Azami WFS kayıt sayısı", min_value=1, max_value=100000, value=10000, step=1000)
+    auto_public_search = st.checkbox("Açık ArcGIS parsel kaynaklarını otomatik tara", value=True, help="Yalnızca herkese açık, kimlik doğrulamasız ve gerekli parsel/idari alanları içeren katmanlar kullanılır.")
 
 if not excel_file:
     st.info("Başlamak için Excel dosyanızı yükleyin.")
@@ -54,6 +57,14 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     if wfs_url.strip() and wfs_layer.strip():
         try: features.extend(fetch_public_wfs(wfs_url.strip(), wfs_layer.strip(), int(wfs_limit)))
         except Exception as exc: source_errors.append(f"WFS: {exc}")
+    if auto_public_search:
+        with st.spinner("Herkese açık ArcGIS parsel katalogları taranıyor..."):
+            try:
+                discovered = discover_public_parcel_features(normalized, max_items=8, max_records_per_layer=3000)
+                features.extend(discovered)
+                st.info(f"Otomatik açık veri taramasında {len(discovered):,} geometri kaydı alındı. Bu sayı Türkiye genelindeki toplam parsel sayısı değildir.")
+            except Exception as exc:
+                source_errors.append(f"Otomatik açık veri keşfi: {exc}")
 
     # TKGM public endpoint is coordinate -> parcel only. Never geocode a neighborhood
     # centroid and pretend it identifies the user's parcel.
@@ -72,9 +83,9 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
                     (row["mahalle"], get_prop(props,"mahalle")),
                     (row["parsel"], get_prop(props,"parsel")),
                 ]
-                if all(a and b and __import__("core.normalize",fromlist=["norm"]).norm(a)==__import__("core.normalize",fromlist=["norm"]).norm(b) for a,b in checks):
+                if all(a and b and norm(a)==norm(b) for a,b in checks):
                     ada = get_prop(props,"ada") or get_prop(props,"ada_pafta")
-                    if ada and __import__("core.normalize",fromlist=["norm"]).norm(row["ada_pafta"]) == __import__("core.normalize",fromlist=["norm"]).norm(ada):
+                    if ada and norm(row["ada_pafta"]) == norm(ada):
                         features.append(feature)
                     else:
                         source_errors.append(f"Excel satırı {row['excel_satir']}: TKGM koordinat sonucu ada/pafta ile doğrulanamadı.")
