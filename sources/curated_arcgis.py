@@ -123,4 +123,53 @@ def fetch_curated_public_parcels(rows, max_features=15000):
     output, notes = [], []
     _kastamonu(session,rows,output,notes)
     _pursaklar(session,rows,output,notes)
+    _adana_seyhan(session,rows,output,notes)
     return output[:max_features], notes
+
+
+# Adana/Seyhan public GIS parcel layer. Its schema is inspected at runtime.
+ADANA_SEYHAN = "https://gispya.seyhan.bel.tr/arcgis/rest/services/KENTREHBERI/MapServer/4"
+
+def _adana_seyhan(session, rows, out, notes):
+    local = [r for r in rows if _n(r.get("il")) == _n("Adana") and (not r.get("ilce") or _n(r.get("ilce")) in {_n("Seyhan"), _n("Adana")})]
+    if not local:
+        notes.append("Adana/Seyhan: Excel'de uygun kayıt yok; servis sorgulanmadı.")
+        return
+    try:
+        response = session.get(ADANA_SEYHAN, params={"f":"json"}, timeout=30)
+        response.raise_for_status()
+        meta = response.json()
+        if meta.get("error"):
+            raise RuntimeError(meta["error"].get("message", "Katman metaverisi alınamadı"))
+        fields = meta.get("fields", [])
+        def find_field(names):
+            wanted = {_n(x) for x in names}
+            for field in fields:
+                if _n(field.get("name")) in wanted or _n(field.get("alias")) in wanted:
+                    return field
+            return None
+        af = find_field(["ada", "ada_no", "adano", "ada numarası", "ada no"])
+        pf = find_field(["parsel", "parsel_no", "parselno", "parsel numarası", "parsel no"])
+        if not af or not pf:
+            notes.append("Adana/Seyhan: Açık PARSEL katmanında ada/parsel alanları bulunamadı; eşleştirme atlandı.")
+            return
+        def val(v, field):
+            s = str(v).strip()
+            if field.get("type") in ("esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeOID") and s.isdigit():
+                return s
+            return _sql(s)
+        pairs = {(str(r.get("ada_pafta", "")).strip(), str(r.get("parsel", "")).strip()) for r in local if r.get("ada_pafta") and r.get("parsel")}
+        clauses = ["(" + af["name"] + "=" + val(a, af) + " AND " + pf["name"] + "=" + val(p, pf) + ")" for a,p in list(pairs)[:350]]
+        if not clauses:
+            return
+        features = _query(session, ADANA_SEYHAN, " OR ".join(clauses), out_sr=4326)
+        for feature in features:
+            attrs = feature.get("attributes") or {}
+            geometry = _geo(feature.get("geometry"), 5256)
+            if geometry:
+                props = dict(attrs)
+                props.update({"IL":"Adana", "ILCE":"Seyhan", "ADA":attrs.get(af["name"]), "PARSEL":attrs.get(pf["name"])})
+                out.append({"type":"Feature", "geometry":geometry, "properties":props, "source":"Seyhan Belediyesi KENTREHBERI açık PARSEL katmanı"})
+        notes.append("Adana/Seyhan açık PARSEL katmanı: " + str(len(features)) + " aday geometri döndü; idari eşleşmeler doğrulanmalı.")
+    except Exception as exc:
+        notes.append("Adana/Seyhan açık parsel servisi sorgulanamadı: " + str(exc))
