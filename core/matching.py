@@ -1,11 +1,10 @@
-from collections import defaultdict
 from core.normalize import norm
 from core.geometry import geometry_summary
 
 ALIASES = {
  "il":["il","iladi","il_adi","province","city"],
- "ilce":["ilce","ilceadi","ilce_adi","ilcead","district"],
- "mahalle":["mahalle","mahalleadi","mahalle_adi","mahallead","tapu_mah_adi","koy","köy","neighborhood"],
+ "ilce":["ilce","ilceadi","ilce_adi","ilcead","district","ilce_adi"],
+ "mahalle":["mahalle","mahalleadi","mahalle_adi","mahallead","tapu_mah_adi","kadastroma","neighborhood","koy","köy"],
  "ada":["ada","adano","ada_no","block"],
  "ada_pafta":["adapafta","ada_pafta","ada-pafta","ada pafta"],
  "parsel":["parsel","parselno","parsel_no","parcel"]
@@ -19,47 +18,68 @@ def get_prop(props, field):
             return "" if v is None else str(v).strip()
     return ""
 
-def feature_key(props):
-    return tuple(norm(get_prop(props,k)) for k in ("il","ilce","mahalle","parsel"))
+def _eq(a,b):
+    return bool(a is not None and b is not None and norm(a)==norm(b))
+
+def _parcel_pair(row, props):
+    ada, parcel = get_prop(props,"ada"), get_prop(props,"parsel")
+    if ada and parcel:
+        return _eq(row["ada_pafta"],ada) and _eq(row["parsel"],parcel)
+    combined = get_prop(props,"ada_pafta")
+    if combined:
+        import re
+        pieces = re.split(r"[/\\-]",combined)
+        if len(pieces)==2:
+            return _eq(row["ada_pafta"],pieces[0].strip()) and _eq(row["parsel"],pieces[1].strip())
+        return _eq(row["ada_pafta"],combined)
+    return False
 
 def match_records(rows, features):
-    index = defaultdict(list)
-    for f in features:
-        p = f.get("properties") or {}
-        key = feature_key(p)
-        if all(key): index[key].append(f)
     output, matched = [], []
     for row in rows:
-        base = { "İL":row["il"], "İlçe":row["ilce"], "Mahalle":row["mahalle"], "ADA-PAFTA":row["ada_pafta"], "PARSEL":row["parsel"] }
-        key = tuple(norm(row[k]) for k in ("il","ilce","mahalle","parsel"))
-        candidates = index.get(key, [])
-        # Ada/pafta must also match exactly against one recognized source property.
-        def ada_matches(feature):
-            props = feature.get("properties", {})
-            ada = get_prop(props, "ada")
-            combined = get_prop(props, "ada_pafta")
-            parcel = get_prop(props, "parsel")
-            accepted = {norm(ada), norm(combined)}
-            if ada and parcel:
-                accepted.update({
-                    norm(f"{ada}/{parcel}"),
-                    norm(f"{ada}-{parcel}"),
-                    norm(f"{ada} {parcel}")
-                })
-            return norm(row["ada_pafta"]) in accepted
-        candidates = [f for f in candidates if ada_matches(f)]
+        base = {"İL":row["il"],"İlçe":row["ilce"],"Mahalle":row["mahalle"],
+                "ADA-PAFTA":row["ada_pafta"],"PARSEL":row["parsel"]}
+        exact, review = [], []
+        for feature in features:
+            props = feature.get("properties") or {}
+            src_il, src_ilce, src_mahalle = (get_prop(props,k) for k in ("il","ilce","mahalle"))
+            if not _eq(row["il"],src_il) or not _parcel_pair(row,props):
+                continue
+            if src_ilce and not _eq(row["ilce"],src_ilce):
+                continue
+            if src_mahalle and not _eq(row["mahalle"],src_mahalle):
+                continue
+            # Missing district/neighborhood attributes mean candidate only,
+            # never a confirmed cadastral match.
+            if src_ilce and src_mahalle:
+                exact.append(feature)
+            else:
+                review.append(feature)
+        candidates = exact if exact else review
         if len(candidates) != 1:
             status = "Bulunamadı" if not candidates else "Doğrulanmalı"
-            reason = "Açık veri kaynağında eşleşme yok." if not candidates else f"{len(candidates)} aday bulundu; tekil eşleşme doğrulanmalı."
-            output.append({**base,"Durum":status,"Enlem":None,"Boylam":None,"Parsel Alanı (m²)":None,"Veri Kaynağı":"","Açıklama":reason,"Excel Satırı":row["excel_satir"]})
+            reason = ("Açık kaynakların kapsadığı alanlarda eşleşme bulunamadı." if not candidates
+                      else f"{len(candidates)} aday bulundu; tekil eşleşme doğrulanmalı.")
+            output.append({**base,"Durum":status,"Enlem":None,"Boylam":None,"Parsel Alanı (m²)":None,
+                           "Veri Kaynağı":"","Açıklama":reason,"Excel Satırı":row["excel_satir"]})
             continue
-        f = candidates[0]
-        summary = geometry_summary(f.get("geometry"))
+        feature = candidates[0]
+        summary = geometry_summary(feature.get("geometry"))
         if not summary:
-            output.append({**base,"Durum":"Doğrulanmalı","Enlem":None,"Boylam":None,"Parsel Alanı (m²)":None,"Veri Kaynağı":f.get("source",""),"Açıklama":"Eşleşen kayıtta geçerli polygon geometrisi yok.","Excel Satırı":row["excel_satir"]})
+            output.append({**base,"Durum":"Doğrulanmalı","Enlem":None,"Boylam":None,"Parsel Alanı (m²)":None,
+                           "Veri Kaynağı":feature.get("source",""),"Açıklama":"Aday kayıtta geçerli polygon geometrisi yok.",
+                           "Excel Satırı":row["excel_satir"]})
             continue
-        lat, lon, area = summary
-        output.append({**base,"Durum":"Bulundu","Enlem":lat,"Boylam":lon,"Parsel Alanı (m²)":area,"Veri Kaynağı":f.get("source",""),"Açıklama":"Beş alan ve polygon geometrisi eşleşti.","Excel Satırı":row["excel_satir"]})
-        matched.append({"type":"Feature","geometry":f["geometry"],"properties":{**base,"Enlem":lat,"Boylam":lon,"Durum":"Bulundu","Veri Kaynağı":f.get("source","")}})
+        lat,lon,area = summary
+        props = feature.get("properties") or {}
+        confirmed = bool(get_prop(props,"ilce") and get_prop(props,"mahalle"))
+        status = "Bulundu" if confirmed else "Doğrulanmalı"
+        reason = ("İl, ilçe, mahalle, ada ve parsel eşleşti." if confirmed
+                  else "Ada/parsel ve il eşleşti; kaynak ilçe veya mahalle bilgisini yayımlamadığı için geometri aday olarak gösteriliyor.")
+        output.append({**base,"Durum":status,"Enlem":lat,"Boylam":lon,"Parsel Alanı (m²)":area,
+                       "Veri Kaynağı":feature.get("source",""),"Açıklama":reason,"Excel Satırı":row["excel_satir"]})
+        # Include candidate polygons for visual review, while status remains explicit.
+        matched.append({"type":"Feature","geometry":feature["geometry"],"properties":{
+            **base,"Enlem":lat,"Boylam":lon,"Durum":status,"Veri Kaynağı":feature.get("source","")}})
     import pandas as pd
     return pd.DataFrame(output), matched
