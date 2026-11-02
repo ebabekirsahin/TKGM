@@ -10,8 +10,14 @@ Uygulama, TKGM Parsel Sorgu web istemcisinin herkese açık koordinat-temelli so
 
 Servis yanıtı 401/403 veya 429 verirse işlem durdurulur. Kimlik doğrulama, CAPTCHA veya erişim kısıtlamaları aşılmaya çalışılmaz. Uç nokta resmî bir toplu veri API'si değil, kamuya açık web istemcisinin sorgu akışıdır; TKGM kullanım şartları ve servis politikaları geçerlidir.
 
+## Doğrudan entegre edilen açık parsel servisleri
+- Kastamonu İl Özel İdaresi TKGM_PUBLIC / Parseller katmanı. Kaynakta ada ve parsel alanları var; ancak ilçe/mahalle doğrulaması sağlanmayan kayıtlar kesin eşleşme kabul edilmez.
+- Pursaklar Belediyesi REHBER/mulkiyet / PARSEL katmanı. İlçe, mahalle, ada ve parsel alanlarını içerir; Excel satırlarıyla bu alanlar üzerinden sorgulanır.
+
+Bu servisler yalnızca kapsadıkları yerlerde işe yarar. Kaynakların açık olması, tüm Türkiye parsellerini kapsadıkları anlamına gelmez.
+
 ## Otomatik açık veri keşfi
-Uygulama, ArcGIS Online'ın herkese açık içerik kataloğunda parsel/kadastro Feature Service katmanlarını arar. Kimlik doğrulamasız katmanların alan şeması incelenir; il, ilçe, mahalle ve ada/parsel kimliklerini birlikte sunmayan katmanlar otomatik eşleştirmeye alınmaz. Katman başına kayıt sayısı sınırlandırılır. Yalnızca WGS84 (EPSG:4326) geometriler kabul edilir. Otomatik katalog araması, Türkiye'deki tüm belediye veya kadastro servislerini keşfettiği anlamına gelmez.
+Uygulama ayrıca ArcGIS Online'ın herkese açık içerik kataloğunda parsel/kadastro Feature Service katmanlarını arar. Kimlik doğrulamasız katmanların alan şeması incelenir; il, ilçe, mahalle ve ada/parsel kimliklerini birlikte sunmayan katmanlar otomatik eşleştirmeye alınmaz. Katman başına kayıt sayısı sınırlandırılır. Yalnızca WGS84 (EPSG:4326) geometriler kabul edilir. Otomatik katalog araması, Türkiye'deki tüm belediye veya kadastro servislerini keşfettiği anlamına gelmez.
 
 ## Diğer açık kaynaklar
 - GeoJSON / KML / ZIP Shapefile yükleme
