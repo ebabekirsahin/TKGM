@@ -54,9 +54,9 @@ def test_lookup_uses_neighborhood_id_and_returns_geojson(monkeypatch):
     monkeypatch.setattr(TKGMClient, "admin_list", admin_list)
     monkeypatch.setattr(TKGMClient, "parcel", parcel)
 
-    rows = [{"il": "Çanakkale", "ilce": "Merkez", "mahalle": "Barbaros",
+    rows = [{"il": "Çanakkale", "ilce": "Merkez", "mahalle": "Barbaros Mahallesi",
              "ada_pafta": "123", "parsel": "7", "excel_satir": 2}]
     features, notes = fetch_public_cadastral_parcels(rows)
     assert len(features) == 1
-    assert features[0]["properties"]["MAHALLE"] == "Barbaros"
+    assert features[0]["properties"]["MAHALLE"] == "Barbaros Mahallesi"
     assert any("1 gerçek geometri" in note for note in notes)
