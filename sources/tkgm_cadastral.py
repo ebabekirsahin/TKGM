@@ -114,7 +114,7 @@ def fetch_public_cadastral_parcels(rows, progress_callback=None):
     output, errors, cache = [], [], {}
     unique = {}
     for row in rows:
-        key = tuple(norm(row.get(k)) for k in ("il", "ilce", "mahalle")) + (str(row.get("ada_pafta", "")).strip(), str(row.get("parsel", "")).strip())
+        key = tuple(_admin_norm(row.get(k)) for k in ("il", "ilce", "mahalle")) + (str(row.get("ada_pafta", "")).strip(), str(row.get("parsel", "")).strip())
         unique.setdefault(key, row)
     total = len(unique)
     for i, (key, row) in enumerate(unique.items(), 1):
