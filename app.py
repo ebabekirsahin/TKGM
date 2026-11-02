@@ -6,6 +6,7 @@ from sources.loaders import load_spatial_upload
 from sources.wfs import fetch_public_wfs
 from sources.tkgm_public import lookup_parcel_by_coordinate
 from sources.arcgis_public import discover_public_parcel_features
+from sources.curated_arcgis import fetch_curated_public_parcels
 from core.normalize import norm
 from map_view.render import build_map
 from reports.export import make_excel
@@ -57,12 +58,23 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     if wfs_url.strip() and wfs_layer.strip():
         try: features.extend(fetch_public_wfs(wfs_url.strip(), wfs_layer.strip(), int(wfs_limit)))
         except Exception as exc: source_errors.append(f"WFS: {exc}")
+    # Curated municipal/TKGM public services are queried directly using the
+    # uploaded cadastral keys; catalogue search remains a secondary discovery path.
+    with st.spinner("Doğrudan açık belediye/TKGM parsel servisleri sorgulanıyor..."):
+        try:
+            curated, curated_notes = fetch_curated_public_parcels(normalized, max_features=15000)
+            features.extend(curated)
+            st.info(f"Doğrudan açık servislerden {len(curated):,} aday parsel geometrisi alındı. Kaynak kapsamları sınırlıdır.")
+            source_errors.extend(curated_notes)
+        except Exception as exc:
+            source_errors.append(f"Doğrudan açık servis sorgusu: {exc}")
+
     if auto_public_search:
         with st.spinner("Herkese açık ArcGIS parsel katalogları taranıyor..."):
             try:
                 discovered = discover_public_parcel_features(normalized, max_items=8, max_records_per_layer=3000)
                 features.extend(discovered)
-                st.info(f"Otomatik açık veri taramasında {len(discovered):,} geometri kaydı alındı. Bu sayı Türkiye genelindeki toplam parsel sayısı değildir.")
+                st.info(f"Otomatik açık veri kataloğundan {len(discovered):,} geometri kaydı alındı. Bu sayı Türkiye genelindeki toplam parsel sayısı değildir.")
             except Exception as exc:
                 source_errors.append(f"Otomatik açık veri keşfi: {exc}")
 
