@@ -54,6 +54,19 @@ else:
 
 if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     features, source_errors = [], []
+    if tkgm_terms_ok:
+        target_names = {"manisa", "afyonkarahisar", "canakkale", "malatya", "adana"}
+        target_rows = [row for row in normalized if norm(row.get("il")) in target_names]
+        if target_rows:
+            try:
+                with st.spinner(f"TKGM üzerinden {len(target_rows):,} taşınmaz sorgulanıyor..."):
+                    cadastral_features, cadastral_notes = fetch_public_cadastral_parcels(target_rows)
+                features.extend(cadastral_features)
+                source_errors.extend(cadastral_notes)
+            except Exception as exc:
+                source_errors.append(f"TKGM ada/parsel sorgusu: {exc}")
+    else:
+        st.info("TKGM ada/parsel sorgusu, kullanım koşulları onaylanmadığı için atlandı.")
     for uploaded in spatial_files or []:
         try: features.extend(load_spatial_upload(uploaded))
         except Exception as exc: source_errors.append(f"{uploaded.name}: {exc}")
@@ -82,7 +95,7 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
 
     # TKGM public endpoint is coordinate -> parcel only. Never geocode a neighborhood
     # centroid and pretend it identifies the user's parcel.
-    if has_coordinates:
+    if has_coordinates and tkgm_terms_ok:
         progress = st.progress(0)
         coordinate_rows = [r for r in normalized if r.get("enlem") is not None and r.get("boylam") is not None]
         for i, row in enumerate(coordinate_rows):
