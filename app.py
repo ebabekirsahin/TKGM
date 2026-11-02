@@ -5,7 +5,7 @@ from core.matching import match_records
 from sources.loaders import load_spatial_upload
 from sources.wfs import fetch_public_wfs
 from sources.tkgm_public import lookup_parcel_by_coordinate
-import sources.tkgm_cadastral as cadastral_lookup
+from sources.tkgm_cadastral import fetch_public_cadastral_parcels
 from sources.arcgis_public import discover_public_parcel_features
 from sources.curated_arcgis import fetch_curated_public_parcels
 from core.normalize import norm
