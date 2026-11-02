@@ -1,5 +1,7 @@
-streamlit
-pandas
-openpyxl
-folium
-streamlit-folium
+streamlit>=1.35,<2
+pandas>=2.0,<3
+openpyxl>=3.1
+folium>=0.16
+streamlit-folium>=0.20
+shapely>=2.0
+requests>=2.31
