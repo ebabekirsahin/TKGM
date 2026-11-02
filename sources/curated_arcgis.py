@@ -79,7 +79,7 @@ def _kastamonu(session, rows, out, notes):
             did = str(m.get("ilceref",""))
             props = dict(attrs)
             props.update({"IL":"Kastamonu","ILCE":district_by_id.get(did,""),
-                          "MAHALLE":m.get("tapumahall") or m.get("kadastroma") or "",
+                          "MAHALLE":m.get("kadastroma") or "",
                           "ADA":attrs.get("adano"),"PARSEL":attrs.get("parselno")})
             geometry = _geo(f.get("geometry"),4326)
             if geometry:
@@ -101,6 +101,8 @@ def _pursaklar(session, rows, out, notes):
             a,p = str(r.get("ada_pafta","")).strip(),str(r.get("parsel","")).strip()
             for value in (f"{a}/{p}",f"{a}-{p}",f"{a} {p}",f"{a} / {p}"):
                 clauses.append(f"adaparsel={_sql(value)}")
+            safe_a, safe_p = a.replace("'", "''"), p.replace("'", "''")
+            clauses.append(f"(adaparsel LIKE '%{safe_a}%' AND adaparsel LIKE '%{safe_p}%')")
         if not clauses:
             return
         features = _query(session,PURSAKLAR," OR ".join(clauses[:300]),out_sr=4326)
