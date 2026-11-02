@@ -12,7 +12,7 @@ streamlit run app.py
 ```
 
 ## Streamlit Community Cloud
-- Repository: ebatabekirsahin/TKGM (GitHub'daki gerçek repository adı/owner kontrol edilmelidir)
+- Repository: ebabekirsahin/TKGM (GitHub'daki gerçek repository adı/owner kontrol edilmelidir)
 - Branch: main
 - Main file: app.py
 
