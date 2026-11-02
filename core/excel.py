@@ -7,6 +7,10 @@ ALIASES = {
  "ada_pafta": ["ada-pafta","ada pafta","adapafta","ada","ada_no","adano"],
  "parsel": ["parsel","parsel no","parsel_no"]
 }
+OPTIONAL_ALIASES = {
+ "enlem": ["enlem","latitude","lat","y"],
+ "boylam": ["boylam","longitude","lon","lng","x"]
+}
 LABELS = {"il":"İL","ilce":"İlçe","mahalle":"Mahalle","ada_pafta":"ADA-PAFTA","parsel":"PARSEL"}
 
 def read_excel(uploaded):
@@ -20,10 +24,17 @@ def normalize_excel(df):
         col = next((lookup[norm(a)] for a in aliases if norm(a) in lookup), None)
         if col is None: missing.append(LABELS[key])
         else: mapping[key] = col
+    for key, aliases in OPTIONAL_ALIASES.items():
+        col = next((lookup[norm(a)] for a in aliases if norm(a) in lookup), None)
+        if col is not None: mapping[key] = col
     if missing: return [], mapping, missing
     rows = []
     for idx, row in df.iterrows():
         item = {key: clean(row[col]) for key,col in mapping.items()}
         item["excel_satir"] = int(idx)+2
+        for coordinate in ("enlem","boylam"):
+            if coordinate in item:
+                try: item[coordinate] = float(item[coordinate].replace(",", "."))
+                except (ValueError, AttributeError): item[coordinate] = None
         rows.append(item)
     return rows, mapping, []
