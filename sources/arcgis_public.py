@@ -111,7 +111,7 @@ def discover_public_parcel_features(rows, max_items=12, max_records_per_layer=50
                             continue
                         spatial = geom.get("spatialReference", {})
                         wkid = spatial.get("latestWkid") or spatial.get("wkid") or 4326
-                        if wkid not in (4326, 4283):
+                        if wkid != 4326:
                             # Query requested outSR 4326; reject unexpected CRS rather than misplot.
                             continue
                         geom_type = "Polygon" if len(rings) == 1 else "Polygon"
