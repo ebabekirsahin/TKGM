@@ -34,10 +34,20 @@ def match_records(rows, features):
         key = tuple(norm(row[k]) for k in ("il","ilce","mahalle","parsel"))
         candidates = index.get(key, [])
         # Ada/pafta must also match exactly against one recognized source property.
-        candidates = [f for f in candidates if norm(row["ada_pafta"]) in {
-            norm(get_prop(f.get("properties",{}),"ada")),
-            norm(get_prop(f.get("properties",{}),"ada_pafta"))
-        }]
+        def ada_matches(feature):
+            props = feature.get("properties", {})
+            ada = get_prop(props, "ada")
+            combined = get_prop(props, "ada_pafta")
+            parcel = get_prop(props, "parsel")
+            accepted = {norm(ada), norm(combined)}
+            if ada and parcel:
+                accepted.update({
+                    norm(f"{ada}/{parcel}"),
+                    norm(f"{ada}-{parcel}"),
+                    norm(f"{ada} {parcel}")
+                })
+            return norm(row["ada_pafta"]) in accepted
+        candidates = [f for f in candidates if ada_matches(f)]
         if len(candidates) != 1:
             status = "Bulunamadı" if not candidates else "Doğrulanmalı"
             reason = "Açık veri kaynağında eşleşme yok." if not candidates else f"{len(candidates)} aday bulundu; tekil eşleşme doğrulanmalı."
