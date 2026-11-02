@@ -46,7 +46,7 @@ def discover_public_parcel_features(rows, max_items=12, max_records_per_layer=50
     for q in queries:
         try:
             sr = session.get(SEARCH_URL, params={
-                "f": "json", "q": q + ' AND type:"Feature Service"',
+                "f": "json", "q": q + ' AND type:"Feature Service" AND access:public',
                 "num": min(max_items, 20), "sortField": "numViews",
                 "sortOrder": "desc"
             }, timeout=20, headers=HEADERS)
