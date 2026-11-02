@@ -9,6 +9,13 @@ IL_URL = "https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/i
 IL_IDS = {"adana": 1, "afyonkarahisar": 3, "canakkale": 17, "malatya": 44, "manisa": 45}
 SOURCE = "TKGM CBS / Parsel Sorgu"
 
+def _admin_norm(value):
+    key = norm(value)
+    for suffix in ("mahallesi", "mahalle", "mah", "koyu", "koy"):
+        if key.endswith(suffix) and len(key) > len(suffix):
+            return key[:-len(suffix)]
+    return key
+
 def _records(data):
     if isinstance(data, dict) and data.get("type") == "FeatureCollection":
         items = [x.get("properties") or {} for x in data.get("features", [])]
@@ -22,7 +29,7 @@ def _records(data):
         ident = d.get("id") or d.get("ilcekodu") or d.get("mahallekodu")
         name = d.get("text") or d.get("ad") or d.get("name") or d.get("ilceadi") or d.get("mahalleadi")
         if ident is not None and name:
-            out[norm(name)] = {"id": str(ident), "name": str(name).strip()}
+            out[_admin_norm(name)] = {"id": str(ident), "name": str(name).strip()}
     return out
 
 class TKGMClient:
@@ -52,7 +59,7 @@ class TKGMClient:
                 if "HTTP 403" in str(exc) or "HTTP 429" in str(exc):
                     raise
                 self.provinces = {}
-        key = norm(name)
+        key = _admin_norm(name)
         if key == "afyon":
             key = "afyonkarahisar"
         if key in self.provinces:
@@ -96,7 +103,7 @@ def _to_feature(data, row, province, district, neighborhood):
         return None
     if parsel is not None and norm(parsel) != norm(row["parsel"]):
         return None
-    props.update({"IL": province, "ILCE": district, "MAHALLE": neighborhood,
+    props.update({"IL": row["il"], "ILCE": row["ilce"], "MAHALLE": row["mahalle"],
                   "ADA": str(ada if ada is not None else row["ada_pafta"]),
                   "PARSEL": str(parsel if parsel is not None else row["parsel"])})
     return {"type":"Feature", "geometry":geometry, "properties":props, "source":SOURCE}
@@ -115,10 +122,10 @@ def fetch_public_cadastral_parcels(rows, progress_callback=None):
             if not all(key):
                 raise ValueError("İl, ilçe, mahalle, ada ve parsel alanları dolu olmalı.")
             province = client.province(row["il"])
-            district = client.admin_list("ilce", province["id"]).get(norm(row["ilce"]))
+            district = client.admin_list("ilce", province["id"]).get(_admin_norm(row["ilce"]))
             if not district:
                 raise ValueError(f"İlçe TKGM listesinde bulunamadı: {row['ilce']}")
-            neighborhood = client.admin_list("mahalle", district["id"]).get(norm(row["mahalle"]))
+            neighborhood = client.admin_list("mahalle", district["id"]).get(_admin_norm(row["mahalle"]))
             if not neighborhood:
                 raise ValueError(f"Mahalle TKGM listesinde bulunamadı: {row['mahalle']}")
             parcel_key = (neighborhood["id"], str(row["ada_pafta"]).strip(), str(row["parsel"]).strip())
