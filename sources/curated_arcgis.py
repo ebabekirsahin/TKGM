@@ -1,27 +1,15 @@
-"""Curated, verified public ArcGIS parcel services in Turkey.
+"""Known public cadastral ArcGIS services with schema-specific adapters.
 
-Coverage is limited to the named administrative areas. Queries are filtered
-using the uploaded Excel's cadastral identifiers; no nationwide coverage is implied.
+Only query rows inside each service's documented administrative footprint.
+A source that lacks neighborhood identifiers produces review candidates, not
+verified matches. No nationwide coverage is implied.
 """
+import re
 import requests
 from pyproj import Transformer
 
-SERVICES = [
-    {
-        "name": "Kastamonu İl Özel İdaresi – TKGM_PUBLIC",
-        "url": "https://e-imar.kastamonuozelidare.gov.tr/arcgis/rest/services/IDARE_PUBLIC/TKGM_PUBLIC/FeatureServer/0",
-        "province": "Kastamonu", "district": None,
-        "ada_field": "adano", "parcel_field": "parselno",
-        "combined_field": None, "wkid": 4326,
-    },
-    {
-        "name": "Pursaklar Belediyesi – PARSEL",
-        "url": "https://cbs.pursaklar.bel.tr/webgis/rest/services/REHBER/mulkiyet/MapServer/1",
-        "province": "Ankara", "district": "Pursaklar",
-        "ada_field": "ada", "parcel_field": "parsel",
-        "combined_field": None, "wkid": 3857,
-    },
-]
+KAST = "https://e-imar.kastamonuozelidare.gov.tr/arcgis/rest/services/IDARE_PUBLIC/TKGM_PUBLIC/FeatureServer"
+PURSAKLAR = "https://cbs.pursaklar.bel.tr/webgis/rest/services/otomasyon/identify/MapServer/0"
 
 def _n(value):
     import unicodedata
@@ -31,94 +19,106 @@ def _n(value):
 def _sql(v):
     return "'" + str(v).replace("'", "''") + "'"
 
-def _polygon(rings, wkid):
-    if wkid == 4326:
-        convert = lambda x,y: (x,y)
-    else:
+def _query(session, url, where, out_fields="*", out_sr=4326):
+    response = session.get(url.rstrip("/") + "/query", params={
+        "f":"json", "where":where, "outFields":out_fields,
+        "returnGeometry":"true", "outSR":str(out_sr), "resultRecordCount":1000
+    }, timeout=45)
+    response.raise_for_status()
+    data = response.json()
+    if data.get("error"):
+        raise RuntimeError(data["error"].get("message","ArcGIS query error"))
+    return data.get("features",[])
+
+def _geo(geom, fallback_wkid):
+    rings = (geom or {}).get("rings")
+    if not rings:
+        return None
+    sr = (geom or {}).get("spatialReference",{})
+    wkid = sr.get("latestWkid") or sr.get("wkid") or fallback_wkid
+    if wkid != 4326:
         transformer = Transformer.from_crs(f"EPSG:{wkid}", "EPSG:4326", always_xy=True)
-        convert = transformer.transform
-    converted = [[list(convert(x,y)) for x,y in ring] for ring in rings]
-    # ArcGIS polygon rings use orientation to distinguish holes. Keep the
-    # service rings as a Polygon; this is adequate for rendering and area tools.
-    return {"type":"Polygon","coordinates":converted}
+        rings = [[list(transformer.transform(x,y)) for x,y in ring] for ring in rings]
+    return {"type":"Polygon","coordinates":rings}
+
+def _kastamonu(session, rows, out, notes):
+    local = [r for r in rows if _n(r.get("il")) == _n("Kastamonu")]
+    if not local:
+        notes.append("Kastamonu TKGM_PUBLIC: Excel'de Kastamonu kaydı yok; bu servis sorgulanmadı.")
+        return
+    base = KAST
+    try:
+        # The published parcel layer has no district/neighborhood names. Join
+        # parcel.tapumahall -> Mahalleler.objectid -> İlceler.objectid.
+        parcel_url = base + "/0"
+        mahalle_url = base + "/1"
+        district_url = base + "/2"
+        pairs = {(str(r["ada_pafta"]).strip(),str(r["parsel"]).strip()) for r in local if r.get("ada_pafta") and r.get("parsel")}
+        where = " OR ".join(f"(adano={_sql(a)} AND parselno={_sql(p)})" for a,p in list(pairs)[:400])
+        if not where:
+            notes.append("Kastamonu: Excel'de ada/parsel çifti boş.")
+            return
+        parcel_features = _query(session,parcel_url,where,out_sr=4326)
+        mahalle_ids = {str((f.get("attributes") or {}).get("tapumahall")) for f in parcel_features
+                       if (f.get("attributes") or {}).get("tapumahall") is not None}
+        mahalle_by_id = {}
+        for mid in mahalle_ids:
+            rows_m = _query(session,mahalle_url,f"objectid={mid}",out_fields="objectid,tapumahall,kadastroma,ilceref",out_sr=4326)
+            if rows_m:
+                mahalle_by_id[mid] = rows_m[0].get("attributes") or {}
+        district_ids = {str(v.get("ilceref")) for v in mahalle_by_id.values() if v.get("ilceref") is not None}
+        district_by_id = {}
+        for did in district_ids:
+            rows_d = _query(session,district_url,f"objectid={did}",out_fields="objectid,ad",out_sr=4326)
+            if rows_d:
+                district_by_id[did] = (rows_d[0].get("attributes") or {}).get("ad","")
+        for f in parcel_features:
+            attrs = f.get("attributes") or {}
+            mid = str(attrs.get("tapumahall",""))
+            m = mahalle_by_id.get(mid,{})
+            did = str(m.get("ilceref",""))
+            props = dict(attrs)
+            props.update({"IL":"Kastamonu","ILCE":district_by_id.get(did,""),
+                          "MAHALLE":m.get("tapumahall") or m.get("kadastroma") or "",
+                          "ADA":attrs.get("adano"),"PARSEL":attrs.get("parselno")})
+            geometry = _geo(f.get("geometry"),4326)
+            if geometry:
+                out.append({"type":"Feature","geometry":geometry,"properties":props,
+                            "source":"Kastamonu İl Özel İdaresi TKGM_PUBLIC"})
+    except Exception as exc:
+        notes.append(f"Kastamonu TKGM_PUBLIC sorgusu başarısız: {exc}")
+
+def _pursaklar(session, rows, out, notes):
+    local = [r for r in rows if _n(r.get("il")) == _n("Ankara") and _n(r.get("ilce")) == _n("Pursaklar")]
+    if not local:
+        notes.append("Pursaklar Belediyesi: Excel'de Ankara/Pursaklar kaydı yok; bu servis sorgulanmadı.")
+        return
+    try:
+        # This public layer exposes only adaparsel, not neighborhood names.
+        # Return geometry candidates, but matching marks them for manual review.
+        clauses = []
+        for r in local:
+            a,p = str(r.get("ada_pafta","")).strip(),str(r.get("parsel","")).strip()
+            for value in (f"{a}/{p}",f"{a}-{p}",f"{a} {p}",f"{a} / {p}"):
+                clauses.append(f"adaparsel={_sql(value)}")
+        if not clauses:
+            return
+        features = _query(session,PURSAKLAR," OR ".join(clauses[:300]),out_sr=4326)
+        for f in features:
+            attrs = f.get("attributes") or {}
+            geometry = _geo(f.get("geometry"),3857)
+            if not geometry:
+                continue
+            props = dict(attrs)
+            props.update({"IL":"Ankara","ILCE":"Pursaklar","ADA-PAFTA":attrs.get("adaparsel","")})
+            out.append({"type":"Feature","geometry":geometry,"properties":props,
+                        "source":"Pursaklar Belediyesi açık PARSEL katmanı"})
+    except Exception as exc:
+        notes.append(f"Pursaklar açık parsel servisi başarısız: {exc}")
 
 def fetch_curated_public_parcels(rows, max_features=15000):
     session = requests.Session()
     output, notes = [], []
-    for cfg in SERVICES:
-        province_rows = [r for r in rows if _n(r.get("il")) == _n(cfg["province"])
-                         and (not cfg["district"] or _n(r.get("ilce")) == _n(cfg["district"]))]
-        if not province_rows:
-            continue
-        pairs = {(str(r.get("ada_pafta","")).strip(), str(r.get("parsel","")).strip())
-                 for r in province_rows if r.get("ada_pafta") and r.get("parsel")}
-        if not pairs:
-            continue
-        try:
-            meta = session.get(cfg["url"], params={"f":"json"}, timeout=20)
-            meta.raise_for_status()
-            info = meta.json()
-            wkid = (info.get("extent",{}).get("spatialReference",{}).get("latestWkid")
-                    or info.get("extent",{}).get("spatialReference",{}).get("wkid")
-                    or cfg["wkid"])
-            fields = {f.get("name") for f in info.get("fields",[])}
-            if cfg["combined_field"] and cfg["combined_field"] not in fields:
-                notes.append(f"{cfg['name']}: adaparsel alanı bulunamadı.")
-                continue
-            if cfg["ada_field"] and (cfg["ada_field"] not in fields or cfg["parcel_field"] not in fields):
-                notes.append(f"{cfg['name']}: ada/parsel alanları bulunamadı.")
-                continue
-            where_parts = []
-            if cfg["combined_field"]:
-                for ada, parcel in pairs:
-                    for value in (f"{ada}/{parcel}", f"{ada}-{parcel}", f"{ada} {parcel}"):
-                        where_parts.append(f"{cfg['combined_field']}={_sql(value)}")
-            else:
-                # Bounded pair queries. Limit OR clauses to keep URL and SQL size manageable.
-                for ada, parcel in list(pairs)[:1500]:
-                    where_parts.append(f"({cfg['ada_field']}={_sql(ada)} AND {cfg['parcel_field']}={_sql(parcel)})")
-            for start in range(0, len(where_parts), 40):
-                where = " OR ".join(where_parts[start:start+40])
-                resp = session.get(cfg["url"].rstrip("/") + "/query", params={
-                    "f":"json", "where":where, "outFields":"*",
-                    "returnGeometry":"true", "outSR":"4326",
-                    "resultRecordCount":min(1000,max_features)
-                }, timeout=45)
-                resp.raise_for_status()
-                payload = resp.json()
-                if payload.get("error"):
-                    raise RuntimeError(payload["error"].get("message","ArcGIS query error"))
-                for feature in payload.get("features",[]):
-                    attrs = feature.get("attributes") or {}
-                    geom = feature.get("geometry") or {}
-                    rings = geom.get("rings")
-                    if not rings:
-                        continue
-                    spatial = geom.get("spatialReference",{})
-                    source_wkid = spatial.get("latestWkid") or spatial.get("wkid") or wkid
-                    # outSR=4326 should return WGS84; convert only when service ignores it.
-                    geometry = _polygon(rings, source_wkid)
-                    props = dict(attrs)
-                    props["IL"] = cfg["province"]
-                    if cfg["district"]:
-                        props["ILCE"] = cfg["district"]
-                    if cfg["ada_field"]:
-                        props["ADA"] = attrs.get(cfg["ada_field"])
-                        props["PARSEL"] = attrs.get(cfg["parcel_field"])
-                    elif cfg["combined_field"]:
-                        combined = str(attrs.get(cfg["combined_field"],"")).strip()
-                        props["ADA-PAFTA"] = combined
-                        # Preserve source composite; split common forms for the matcher.
-                        import re
-                        bits = re.split(r"[/\\-]", combined)
-                        if len(bits)==2:
-                            props["ADA"], props["PARSEL"] = bits[0].strip(), bits[1].strip()
-                    output.append({
-                        "type":"Feature","geometry":geometry,"properties":props,
-                        "source":cfg["name"]
-                    })
-                    if len(output) >= max_features:
-                        return output, notes
-        except Exception as exc:
-            notes.append(f"{cfg['name']}: {exc}")
-    return output, notes
+    _kastamonu(session,rows,output,notes)
+    _pursaklar(session,rows,output,notes)
+    return output[:max_features], notes
