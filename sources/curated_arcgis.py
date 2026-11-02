@@ -16,10 +16,10 @@ SERVICES = [
     },
     {
         "name": "Pursaklar Belediyesi – PARSEL",
-        "url": "https://cbs.pursaklar.bel.tr/webgis/rest/services/otomasyon/identify/MapServer/0",
+        "url": "https://cbs.pursaklar.bel.tr/webgis/rest/services/REHBER/mulkiyet/MapServer/1",
         "province": "Ankara", "district": "Pursaklar",
-        "ada_field": None, "parcel_field": None,
-        "combined_field": "adaparsel", "wkid": 3857,
+        "ada_field": "ada", "parcel_field": "parsel",
+        "combined_field": None, "wkid": 3857,
     },
 ]
 
