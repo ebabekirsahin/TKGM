@@ -1,0 +1,1 @@
+"""TKGM parcel data adapter."""
