@@ -5,7 +5,7 @@ from core.geometry import geometry_summary
 ALIASES = {
  "il":["il","iladi","il_adi","province","city"],
  "ilce":["ilce","ilceadi","ilce_adi","ilcead","district"],
- "mahalle":["mahalle","mahalleadi","mahalle_adi","mahallead","koy","köy","neighborhood"],
+ "mahalle":["mahalle","mahalleadi","mahalle_adi","mahallead","tapu_mah_adi","koy","köy","neighborhood"],
  "ada":["ada","adano","ada_no","block"],
  "ada_pafta":["adapafta","ada_pafta","ada-pafta","ada pafta"],
  "parsel":["parsel","parselno","parsel_no","parcel"]
