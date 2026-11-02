@@ -110,12 +110,13 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
         with st.expander(f"Kaynak / sorgu notları ({len(source_errors)})"):
             for msg in source_errors: st.warning(msg)
     if not features:
-        st.error("Bu çalıştırmada Excel kayıtlarıyla güvenilir biçimde eşleşen açık parsel geometrisi bulunamadı. Koordinat eklemeniz gerekmiyor; farklı açık veri katalogları ve belediye katmanlarıyla kapsama alanını genişletmemiz gerekiyor. Yaklaşık mahalle merkezleri parsel konumu olarak kullanılmadı.")
-        st.stop()
+        st.warning("Bu Excel'in kapsadığı il/ilçelerde şu anda erişilebilir açık parsel geometrisi bulunamadı. Koordinat eklemeniz gerekmiyor; aşağıda her kaynağın neden sonuç vermediğini inceleyebilirsiniz.")
     with st.spinner(f"{len(features):,} geometri kaydı eşleştiriliyor..."):
         results, matched_features = match_records(normalized, features)
     st.session_state["results"] = results
     st.session_state["matched_features"] = matched_features
+    st.session_state["source_diagnostics"] = source_errors
+    st.session_state["source_feature_count"] = len(features)
 
 if "results" not in st.session_state:
     st.info("Gerçek veri kaynağı ekledikten sonra eşleştirme butonuna basın.")
