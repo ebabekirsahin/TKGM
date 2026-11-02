@@ -10,6 +10,9 @@ Uygulama, TKGM Parsel Sorgu web istemcisinin herkese açık koordinat-temelli so
 
 Servis yanıtı 401/403 veya 429 verirse işlem durdurulur. Kimlik doğrulama, CAPTCHA veya erişim kısıtlamaları aşılmaya çalışılmaz. Uç nokta resmî bir toplu veri API'si değil, kamuya açık web istemcisinin sorgu akışıdır; TKGM kullanım şartları ve servis politikaları geçerlidir.
 
+## Otomatik açık veri keşfi
+Uygulama, ArcGIS Online'ın herkese açık içerik kataloğunda parsel/kadastro Feature Service katmanlarını arar. Kimlik doğrulamasız katmanların alan şeması incelenir; il, ilçe, mahalle ve ada/parsel kimliklerini birlikte sunmayan katmanlar otomatik eşleştirmeye alınmaz. Katman başına kayıt sayısı sınırlandırılır. Yalnızca WGS84 (EPSG:4326) geometriler kabul edilir. Otomatik katalog araması, Türkiye'deki tüm belediye veya kadastro servislerini keşfettiği anlamına gelmez.
+
 ## Diğer açık kaynaklar
 - GeoJSON / KML / ZIP Shapefile yükleme
 - Kullanım koşulları izin veren, kimlik doğrulamasız açık WFS (GeoJSON çıktısı)
