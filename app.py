@@ -58,11 +58,19 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
         target_names = {"manisa", "afyonkarahisar", "canakkale", "malatya", "adana"}
         target_rows = [row for row in normalized if norm(row.get("il")) in target_names]
         if target_rows:
+            tkgm_bar = st.progress(0)
+            tkgm_status = st.empty()
+            def _show_tkgm_progress(done, total, current_row):
+                tkgm_bar.progress(done / max(total, 1))
+                tkgm_status.caption(f"TKGM sorgusu: {done:,} / {total:,} tekil taşınmaz")
             try:
                 with st.spinner(f"TKGM üzerinden {len(target_rows):,} taşınmaz sorgulanıyor..."):
-                    cadastral_features, cadastral_notes = fetch_public_cadastral_parcels(target_rows)
+                    cadastral_features, cadastral_notes = fetch_public_cadastral_parcels(
+                        target_rows, progress_callback=_show_tkgm_progress
+                    )
                 features.extend(cadastral_features)
                 source_errors.extend(cadastral_notes)
+                tkgm_status.empty()
             except Exception as exc:
                 source_errors.append(f"TKGM ada/parsel sorgusu: {exc}")
     else:
