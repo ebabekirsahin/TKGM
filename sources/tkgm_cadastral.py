@@ -9,6 +9,12 @@ IL_URL = "https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/i
 IL_IDS = {"adana": 1, "afyonkarahisar": 3, "canakkale": 17, "malatya": 44, "manisa": 45}
 SOURCE = "TKGM CBS / Parsel Sorgu"
 
+class TKGMAccessBlocked(RuntimeError):
+    """TKGM rejected access or rate-limited the request."""
+
+class TKGMServiceUnavailable(RuntimeError):
+    """TKGM is unreachable or returned a server-side failure."""
+
 def _admin_norm(value):
     key = norm(value)
     for suffix in ("mahallesi", "mahalle", "mah", "koyu", "koy"):
@@ -44,20 +50,28 @@ class TKGMClient:
         wait = 0.35 - (time.monotonic() - self.last)
         if wait > 0:
             time.sleep(wait)
-        r = self.s.get(url, timeout=25)
+        try:
+            r = self.s.get(url, timeout=25)
+        except requests.RequestException as exc:
+            raise TKGMServiceUnavailable(f"TKGM servisine ulaşılamadı: {exc}") from exc
         self.last = time.monotonic()
         if r.status_code in (401, 403, 429):
-            raise RuntimeError(f"TKGM HTTP {r.status_code}; servis erişimi/kota nedeniyle işlem durduruldu.")
+            raise TKGMAccessBlocked(f"TKGM HTTP {r.status_code}; erişim/kota nedeniyle işlem durduruldu.")
+        if r.status_code >= 500:
+            raise TKGMServiceUnavailable(f"TKGM HTTP {r.status_code}; servis hatası nedeniyle işlem durduruldu.")
         r.raise_for_status()
-        return r.json()
+        try:
+            return r.json()
+        except ValueError as exc:
+            raise TKGMServiceUnavailable("TKGM servisi JSON dışı yanıt döndürdü.") from exc
 
     def province(self, name):
         if self.provinces is None:
             try:
                 self.provinces = _records(self.get(IL_URL))
-            except Exception as exc:
-                if "HTTP 403" in str(exc) or "HTTP 429" in str(exc):
-                    raise
+            except (TKGMAccessBlocked, TKGMServiceUnavailable):
+                raise
+            except Exception:
                 self.provinces = {}
         key = _admin_norm(name)
         if key == "afyon":
@@ -117,6 +131,7 @@ def fetch_public_cadastral_parcels(rows, progress_callback=None):
         key = tuple(_admin_norm(row.get(k)) for k in ("il", "ilce", "mahalle")) + (str(row.get("ada_pafta", "")).strip(), str(row.get("parsel", "")).strip())
         unique.setdefault(key, row)
     total = len(unique)
+    no_geometry = 0
     for i, (key, row) in enumerate(unique.items(), 1):
         try:
             if not all(key):
@@ -133,14 +148,18 @@ def fetch_public_cadastral_parcels(rows, progress_callback=None):
                 cache[parcel_key] = _to_feature(client.parcel(*parcel_key), row, province["name"], district["name"], neighborhood["name"])
             if cache[parcel_key]:
                 output.append(cache[parcel_key])
+            else:
+                no_geometry += 1
+        except (TKGMAccessBlocked, TKGMServiceUnavailable) as exc:
+            errors.append(str(exc))
+            errors.append(f"Servis kısıtı/erişilemezlik nedeniyle sorgu {i-1:,}/{total:,} kayıtta durduruldu.")
+            break
         except Exception as exc:
-            if "HTTP 403" in str(exc) or "HTTP 429" in str(exc):
-                errors.append(str(exc))
-                errors.append(f"Sorgu kısıt nedeniyle {i-1}/{total} kayıtta durduruldu.")
-                break
             if len(errors) < 30:
                 errors.append(f"Excel satırı {row.get('excel_satir', '?')}: {exc}")
         if progress_callback and (i % 10 == 0 or i == total):
             progress_callback(i, total, row)
-    errors.insert(0, f"TKGM: {len(output):,} gerçek geometri / {total:,} benzersiz parsel anahtarı işlendi.")
+    errors.insert(0, f"TKGM: {len(output):,} gerçek geometri / {total:,} benzersiz parsel anahtarı değerlendirildi.")
+    if no_geometry:
+        errors.append(f"TKGM: {no_geometry:,} sorguda eşleşen poligon dönmedi.")
     return output, errors
