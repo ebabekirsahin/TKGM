@@ -145,8 +145,8 @@ def _seyhan(session, rows, out, notes):
         if not pairs:
             notes.append("Adana/Seyhan: sorgulanabilir ada/parsel çifti bulunamadı.")
             return
-        clauses = [f"(ADANO={_sql(a)} AND PARSELNO={_sql(p)})" for a,p in sorted(pairs)[:350]]
-        parcel_features = _query(session, SEYHAN_BASE + "/4", " OR ".join(clauses), out_sr=4326)
+        clauses = [f"(ADANO={_sql(a)} AND PARSELNO={_sql(p)} AND TIP=2)" for a,p in sorted(pairs)[:350]]
+        parcel_features = _query(session, SEYHAN_BASE + "/4", " OR ".join(clauses), out_fields="ADANO,PARSELNO,MAHALLEID,TIP,PAFTANO,ADAPARSEL", out_sr=4326)
         mahalle_ids = sorted({str((f.get("attributes") or {}).get("MAHALLEID", "")).strip()
                               for f in parcel_features
                               if (f.get("attributes") or {}).get("MAHALLEID")})
