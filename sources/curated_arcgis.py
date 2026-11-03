@@ -118,9 +118,79 @@ def _pursaklar(session, rows, out, notes):
     except Exception as exc:
         notes.append(f"Pursaklar açık parsel servisi başarısız: {exc}")
 
+
+# This is a publicly queryable parcel layer published by Seyhan Municipality.
+# Schema verified from its ArcGIS REST layer metadata:
+# KENTREHBERI/MapServer/4: ADANO, PARSELNO, MAHALLEID.
+# Layer 7: MAHALLE (ID, AD, ILCEID); layer 6: ILCE (ID, AD).
+SEYHAN_BASE = "https://gispya.seyhan.bel.tr/arcgis/rest/services/KENTREHBERI/MapServer"
+
+def _guid_sql(value):
+    value = str(value).strip()
+    if not value.startswith("{"):
+        value = "{" + value.strip("{}") + "}"
+    return _sql(value)
+
+def _seyhan(session, rows, out, notes):
+    local = [r for r in rows if _n(r.get("il")) == _n("Adana") and _n(r.get("ilce")) == _n("Seyhan")]
+    outside = [r for r in rows if _n(r.get("il")) == _n("Adana") and _n(r.get("ilce")) != _n("Seyhan")]
+    if outside:
+        notes.append(f"Adana/Seyhan açık katmanı yalnızca Seyhan ilçesini kapsar; {len(outside):,} Adana kaydı bu kaynaktan sorgulanmadı.")
+    if not local:
+        return
+    try:
+        # Query by exact cadastral pair only; fuzzy substring matching is unsafe.
+        pairs = {(str(r.get("ada_pafta", "")).strip(), str(r.get("parsel", "")).strip()) for r in local
+                 if r.get("ada_pafta") not in (None, "") and r.get("parsel") not in (None, "")}
+        if not pairs:
+            notes.append("Adana/Seyhan: sorgulanabilir ada/parsel çifti bulunamadı.")
+            return
+        clauses = [f"(ADANO={_sql(a)} AND PARSELNO={_sql(p)})" for a,p in sorted(pairs)[:350]]
+        parcel_features = _query(session, SEYHAN_BASE + "/4", " OR ".join(clauses), out_sr=4326)
+        mahalle_ids = sorted({str((f.get("attributes") or {}).get("MAHALLEID", "")).strip()
+                              for f in parcel_features
+                              if (f.get("attributes") or {}).get("MAHALLEID")})
+        mahalle_by_id = {}
+        if mahalle_ids:
+            # ArcGIS GUID comparisons use braced GUID literals.
+            ids = ",".join(_guid_sql(x) for x in mahalle_ids[:350])
+            for feature in _query(session, SEYHAN_BASE + "/7", f"ID IN ({ids})",
+                                  out_fields="ID,AD,ILCEID", out_sr=4326):
+                attrs = feature.get("attributes") or {}
+                if attrs.get("ID") is not None:
+                    mahalle_by_id[str(attrs["ID"]).strip().strip("{}").casefold()] = attrs
+        district_ids = sorted({str(v.get("ILCEID", "")).strip()
+                               for v in mahalle_by_id.values() if v.get("ILCEID")})
+        district_by_id = {}
+        if district_ids:
+            ids = ",".join(_guid_sql(x) for x in district_ids[:350])
+            for feature in _query(session, SEYHAN_BASE + "/6", f"ID IN ({ids})",
+                                  out_fields="ID,AD", out_sr=4326):
+                attrs = feature.get("attributes") or {}
+                if attrs.get("ID") is not None:
+                    district_by_id[str(attrs["ID"]).strip().strip("{}").casefold()] = attrs.get("AD", "")
+        for feature in parcel_features:
+            attrs = feature.get("attributes") or {}
+            mid = str(attrs.get("MAHALLEID", "")).strip().strip("{}").casefold()
+            mahalle = mahalle_by_id.get(mid, {})
+            did = str(mahalle.get("ILCEID", "")).strip().strip("{}").casefold()
+            geometry = _geo(feature.get("geometry"), 4326)
+            if not geometry:
+                continue
+            props = dict(attrs)
+            props.update({"IL": "Adana", "ILCE": district_by_id.get(did, "Seyhan"),
+                          "MAHALLE": mahalle.get("AD", ""),
+                          "ADA": attrs.get("ADANO"), "PARSEL": attrs.get("PARSELNO")})
+            out.append({"type":"Feature", "geometry":geometry, "properties":props,
+                        "source":"Seyhan Belediyesi KENTREHBERI açık PARSEL katmanı"})
+        notes.append(f"Adana/Seyhan açık PARSEL katmanı: {len(parcel_features):,} kayıt döndürdü; {len(out):,} geçerli geometri alındı.")
+    except Exception as exc:
+        notes.append(f"Adana/Seyhan açık parsel servisi sorgulanamadı: {exc}")
+
 def fetch_curated_public_parcels(rows, max_features=15000):
     session = requests.Session()
     output, notes = [], []
     _kastamonu(session,rows,output,notes)
     _pursaklar(session,rows,output,notes)
+    _seyhan(session,rows,output,notes)
     return output[:max_features], notes
