@@ -52,7 +52,9 @@ def _parse_coordinate_values(value, axis):
                 continue
             direction_match = re.search(r"([NSEW])$", token)
             direction = direction_match.group(1) if direction_match else ""
-            token = re.sub(r"[°º'\"\\sNSEW]", "", token)
+            if direction:
+                token = token[:-1]
+            token = token.replace("°", "").replace("º", "").replace(" ", "")
             if token.count(",") == 1 and "." not in token:
                 token = token.replace(",", ".")
             elif "," in token and "." in token:
