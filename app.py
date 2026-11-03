@@ -105,7 +105,8 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     # centroid and pretend it identifies the user's parcel.
     if has_coordinates and tkgm_terms_ok:
         progress = st.progress(0)
-        coordinate_rows = [r for r in normalized if r.get("enlem") is not None and r.get("boylam") is not None]
+        target_names = {"manisa", "afyonkarahisar", "canakkale", "malatya", "adana"}
+        coordinate_rows = [r for r in normalized if r.get("enlem") is not None and r.get("boylam") is not None and norm(r.get("il")) not in target_names]
         for i, row in enumerate(coordinate_rows):
             try:
                 feature = lookup_parcel_by_coordinate(row["enlem"], row["boylam"])
