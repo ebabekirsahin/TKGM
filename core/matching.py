@@ -62,6 +62,9 @@ def match_records(rows, features):
     output, matched = [], []
     for row in rows:
         base = {"İL":row["il"],"İlçe":row["ilce"],"Mahalle":row["mahalle"],
+        coordinate_points = row.get("coordinate_points") or []
+        excel_lat = coordinate_points[0]["lat"] if coordinate_points else row.get("enlem")
+        excel_lon = coordinate_points[0]["lon"] if coordinate_points else row.get("boylam")
                 "ADA-PAFTA":row["ada_pafta"],"PARSEL":row["parsel"]}
         exact, review = [], []
         for feature in features:
@@ -84,10 +87,10 @@ def match_records(rows, features):
             status = "Bulunamadı" if not candidates else "Doğrulanmalı"
             reason = ("Açık kaynakların kapsadığı alanlarda eşleşme bulunamadı." if not candidates
                       else f"{len(candidates)} aday bulundu; tekil eşleşme doğrulanmalı.")
-            output.append({**base,"Durum":status,"Enlem":None,"Boylam":None,"Parsel Alanı (m²)":None,
+            if excel_lat is not None and excel_lon is not None:
+                reason += " Excel koordinatı haritada ayrıca gösteriliyor; parsel sınırı olarak kabul edilmedi."
+            output.append({**base,"Durum":status,"Enlem":excel_lat,"Boylam":excel_lon,"Parsel Alanı (m²)":None,
                            "Veri Kaynağı":"","Açıklama":reason,"Excel Satırı":row["excel_satir"]})
-            continue
-        feature = candidates[0]
         summary = geometry_summary(feature.get("geometry"))
         if not summary:
             output.append({**base,"Durum":"Doğrulanmalı","Enlem":None,"Boylam":None,"Parsel Alanı (m²)":None,
