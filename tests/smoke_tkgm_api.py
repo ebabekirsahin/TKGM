@@ -3,7 +3,12 @@
 This checks connectivity and response parsing only. It deliberately does not issue
 parcel requests or retrieve property geometries.
 """
-from sources.tkgm_cadastral import IL_IDS, TKGMClient
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sources.tkgm_cadastral import TKGMClient
 
 
 def main():
