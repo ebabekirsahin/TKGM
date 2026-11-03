@@ -6,7 +6,7 @@ from core.normalize import norm
 
 BASE = "https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api"
 IL_URL = "https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/ilListe.json"
-IL_IDS = {"adana": 1, "afyonkarahisar": 3, "canakkale": 17, "malatya": 44, "manisa": 45}
+IL_IDS = {"manisa": 67, "afyonkarahisar": 25, "canakkale": 39, "malatya": 66, "adana": 23}
 SOURCE = "TKGM CBS / Parsel Sorgu"
 
 class TKGMAccessBlocked(RuntimeError):
