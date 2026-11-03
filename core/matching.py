@@ -1,4 +1,5 @@
 from core.normalize import norm
+import json
 from core.geometry import geometry_summary
 
 ALIASES = {
@@ -34,7 +35,28 @@ def _parcel_pair(row, props):
         return _eq(row["ada_pafta"],combined)
     return False
 
+def _dedupe_identical_features(features):
+    """Remove byte-for-byte identical parcel copies returned by two public sources.
+
+    Distinct geometries sharing one cadastral key are intentionally retained so
+    the caller sees an ambiguous candidate rather than a silently chosen shape.
+    """
+    seen = set()
+    result = []
+    for feature in features:
+        geometry = feature.get("geometry")
+        if not geometry:
+            result.append(feature)
+            continue
+        identity = json.dumps(geometry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        result.append(feature)
+    return result
+
 def match_records(rows, features):
+    features = _dedupe_identical_features(features)
     output, matched = [], []
     for row in rows:
         base = {"İL":row["il"],"İlçe":row["ilce"],"Mahalle":row["mahalle"],
