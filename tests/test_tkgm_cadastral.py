@@ -1,3 +1,15 @@
+from sources.tkgm_cadastral import IL_IDS
+
+
+def test_live_verified_fallback_province_ids():
+    assert IL_IDS == {
+        "manisa": 67,
+        "afyonkarahisar": 25,
+        "canakkale": 39,
+        "malatya": 66,
+        "adana": 23,
+    }
+
 from sources.tkgm_cadastral import _records, _to_feature, fetch_public_cadastral_parcels, TKGMClient
 
 
