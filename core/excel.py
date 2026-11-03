@@ -86,6 +86,11 @@ def _coordinate_pairs(df, row):
     # Stable order: generic ENLEM/BOYLAM first, then numbered pairs.
     def order(item):
         key = item[0]
+        if key == "default":
+            return (0, 0, "")
+        if key.isdigit():
+            return (1, 0, int(key))
+        return (1, 1, key)
         return (0 if key == "default" else 1, int(key) if key.isdigit() else key)
     pairs = []
     for _, columns in sorted(groups.items(), key=order):
