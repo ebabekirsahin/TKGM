@@ -152,7 +152,11 @@ if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     st.session_state["source_feature_count"] = len(features)
 
 if "results" not in st.session_state:
-    st.info("Gerçek veri kaynağı ekledikten sonra eşleştirme butonuna basın.")
+    st.subheader("Türkiye haritası")
+    from streamlit_folium import st_folium
+    st_folium(build_map([], coordinate_points=coordinate_points),
+              use_container_width=True, height=680, returned_objects=[])
+    st.info("Harita hazır. Excel koordinatları varsa işaretçiler yukarıda görünür; parsel geometrilerini bulmak için eşleştirme düğmesine basın.")
     st.stop()
 results = st.session_state["results"]
 matched = st.session_state["matched_features"]
