@@ -45,10 +45,12 @@ def _dedupe_identical_features(features):
     result = []
     for feature in features:
         geometry = feature.get("geometry")
-        if not geometry:
+        props = feature.get("properties") or {}
+        parcel_key = tuple(norm(get_prop(props, field)) for field in ("il", "ilce", "mahalle", "ada", "parsel"))
+        if not geometry or not all(parcel_key):
             result.append(feature)
             continue
-        identity = json.dumps(geometry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        identity = parcel_key + (json.dumps(geometry, sort_keys=True, separators=(",", ":"), ensure_ascii=False),)
         if identity in seen:
             continue
         seen.add(identity)
