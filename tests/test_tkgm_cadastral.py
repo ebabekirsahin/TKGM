@@ -15,7 +15,7 @@ def test_parse_tkgm_geojson_admin_lists():
 
 
 def test_only_real_polygon_and_matching_cadastral_keys_are_accepted():
-    row = {"ada_pafta": "123", "parsel": "7"}
+    row = {"il": "Çanakkale", "ilce": "Merkez", "mahalle": "Barbaros Mahallesi", "ada_pafta": "123", "parsel": "7"}
     feature = {
         "type": "Feature",
         "geometry": {"type": "Polygon", "coordinates": [[[26, 40], [26.1, 40], [26.1, 40.1], [26, 40.1], [26, 40]]]},
