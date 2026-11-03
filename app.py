@@ -45,12 +45,21 @@ st.subheader("Excel önizlemesi")
 st.dataframe(df.head(20), use_container_width=True)
 st.write(f"Toplam kayıt: **{len(normalized):,}**")
 tkgm_terms_ok = st.checkbox("TKGM açık Parsel Sorgu kullanım koşullarını kabul ediyorum; istekler servis limitlerine tabidir.", value=False)
-has_coordinates = all("enlem" in r and "boylam" in r for r in normalized)
+coordinate_points = []
+for row in normalized:
+    for point_index, point in enumerate(row.get("coordinate_points") or [], start=1):
+        coordinate_points.append({
+            "lat": point["lat"], "lon": point["lon"],
+            "il": row.get("il", ""), "ilce": row.get("ilce", ""),
+            "mahalle": row.get("mahalle", ""),
+            "ada_pafta": row.get("ada_pafta", ""), "parsel": row.get("parsel", ""),
+            "excel_satir": row.get("excel_satir", ""), "point_index": point_index,
+        })
+has_coordinates = bool(coordinate_points)
 if has_coordinates:
-    valid_coords = sum(r.get("enlem") is not None and r.get("boylam") is not None for r in normalized)
-    st.info(f"Excel'de {valid_coords:,} satırda geçerli ENLEM/BOYLAM bulundu. Bu koordinatlar TKGM'nin herkese açık koordinat sorgusunda kullanılabilir.")
+    st.success(f"Excel'den {len(coordinate_points):,} geçerli koordinat noktası okundu. Noktalar parsel eşleşmesinden bağımsız olarak haritada gösterilecek.")
 else:
-    st.info("Koordinat sütunları zorunlu değil. Uygulama, aşağıdaki eşleştirme sırasında herkese açık parsel katmanlarını otomatik tarayacak.")
+    st.info("Koordinat sütunu bulunamadı veya değerler geçersiz. Yine de Türkiye haritası açılacak.")
 
 if st.button("Verileri eşleştir ve haritayı oluştur", type="primary"):
     features, source_errors = [], []
@@ -156,11 +165,13 @@ b.metric("Bulundu", f"{found:,}")
 c.metric("Doğrulanmalı", f"{verify:,}")
 d.metric("Bulunamadı", f"{missing:,}")
 st.subheader("Türkiye genelindeki taşınmazlar")
-if matched:
-    from streamlit_folium import st_folium
-    st_folium(build_map(matched), use_container_width=True, height=680, returned_objects=[])
-else:
-    st.warning("Gerçek geometriyle eşleşen kayıt bulunamadı; sahte nokta eklenmedi.")
+from streamlit_folium import st_folium
+st_folium(build_map(matched, coordinate_points=coordinate_points),
+          use_container_width=True, height=680, returned_objects=[])
+if not matched and coordinate_points:
+    st.info("Mavi işaretçiler Excel koordinatlarını gösterir. Henüz doğrulanmış parsel poligonu bulunmaması haritanın açılmasını engellemez.")
+elif not matched:
+    st.warning("Parsel geometrisi bulunamadı. Türkiye taban haritası yine de gösteriliyor.")
 st.subheader("Eşleştirme sonuçları")
 statuses = ["Bulundu","Doğrulanmalı","Bulunamadı"]
 selected = st.multiselect("Durum filtresi", statuses, default=statuses)
