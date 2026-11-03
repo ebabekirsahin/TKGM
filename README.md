@@ -55,3 +55,9 @@ Excel dosyaları uygulama oturumunda işlenir; kalıcı veri tabanı/depolama ya
 ## Beş il için TKGM ada/parsel sorgusu
 
 Manisa, Afyonkarahisar, Çanakkale, Malatya ve Adana kayıtlarında uygulama; il, ilçe ve mahalle kodlarını TKGM'nin herkese açık Parsel Sorgu/CBS idari listelerinden çözmeyi, ardından mahalle kodu + ada + parsel ile GeoJSON geometri istemeyi dener. Kod: `sources/tkgm_cadastral.py`. Kullanıcı onayı gerekir; HTTP 401/403/429 yanıtında sorgular durdurulur. Bu entegrasyon kamuya açık web istemcisiyle aynı API akışını kullanan bir istemci uygulamasıdır, hizmet garantili resmî toplu veri API'si olarak sunulmaz. 10.000 kayıt için süre ve kota servis yanıtlarına bağlıdır; önce küçük örnekle test edin.
+
+### Adana / Seyhan açık belediye parsel katmanı
+
+Seyhan Belediyesi KENTREHBERI ArcGIS REST hizmetinde `PARSEL` katmanı (MapServer/4) poligon geometri sunar. Alan şemasında `ADANO`, `PARSELNO` ve `MAHALLEID` alanları vardır. `MAHALLE` (MapServer/7) ve `İLÇE` (MapServer/6) katmanlarıyla GUID bağlantısı kurulur. Uygulama yalnızca kadastro türünü (`TIP=2`) sorgular. Kaynak: https://gispya.seyhan.bel.tr/arcgis/rest/services/KENTREHBERI/MapServer
+
+Bu kaynak yalnızca Adana / Seyhan için geçerlidir; Adana'nın diğer ilçelerine genellenmez.
